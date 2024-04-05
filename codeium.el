@@ -792,12 +792,7 @@ returns the body as returned by codeium-make-body-for-api
 If `codeium-api-enabled' returns nil, does nothing.
 
 "
-	(unless (codeium-state-alive-tracker state)
-		(error "codeium-state is not alive! %s" state))
-	(when (codeium-get-config 'codeium-api-enabled api state)
-		(let ((body (codeium-make-body-for-api api state vals-alist)))
-			(codeium-request-with-body api state body (codeium-state-alive-tracker state) callback)
-			body)))
+	)
 
 
 (defun codeium-background-process-schedule (state)
@@ -951,33 +946,48 @@ this uses `sit-for', which means that timers can be ran while this function
 waits, but these function called by timers must exit before this function
 returns. Prefer using `codeium-request' directly instead.
 "
-	(let* ((state codeium-state)
-			  (tracker (codeium-state-alive-tracker state))
-			  (requestid (cl-incf (codeium-state-last-request-id state)))
-			  (_ (puthash requestid t (codeium-state-pending-table state)))
+	(let* ((tracker (codeium-state-alive-tracker codeium-state))
+			  (requestid (cl-incf (codeium-state-last-request-id codeium-state)))
+			  (_ (puthash requestid t (codeium-state-pending-table codeium-state)))
 			  (reqbody
-				  (codeium-request 'GetCompletions state nil
-					  (lambda (res)
-						  (when (gethash requestid (codeium-state-pending-table state))
-							  (remhash requestid (codeium-state-pending-table state))
-							  (puthash requestid res (codeium-state-results-table state))))))
+				  (progn
+					  (unless (codeium-state-alive-tracker codeium-state)
+						  (error "codeium-state is not alive! %s" codeium-state))
+					  (let ((body
+								(let (body)
+									(push (cons 'codeium/editor_options/insert_spaces (if indent-tabs-mode :false t)) body)
+									(mapc
+										(lambda (field)
+											(let ((val (codeium-get-config field 'GetCompletions codeium-state nil)))
+												(when val
+													(setf (codeium-nested-alist-get body field) val))))
+										'(											 codeium/editor_options/tab_size
+											 codeium/document/line_ending
+											 codeium/document/language
+											 codeium/document/editor_language
+											 codeium/document/cursor_offset
+											 codeium/document/text
+											 codeium/metadata/api_key
+											 codeium/metadata/request_id
+											 codeium/metadata/ide_version
+											 codeium/metadata/extension_version
+											 codeium/metadata/ide_name))
+									body)))
+						  (codeium-request-with-body 'GetCompletions codeium-state body (codeium-state-alive-tracker codeium-state)
+							  (lambda (res)
+								  (when (gethash requestid (codeium-state-pending-table codeium-state))
+									  (remhash requestid (codeium-state-pending-table codeium-state))
+									  (puthash requestid res (codeium-state-results-table codeium-state)))))
+						  body)))
 			  (rst 'noexist))
-		(while (and (eq tracker (codeium-state-alive-tracker state)) (eq rst 'noexist) (not (input-pending-p)))
-			(sit-for (codeium-get-config 'codeium-delay nil state))
-			(setq rst (gethash requestid (codeium-state-results-table state) 'noexist)))
-		(if (and (eq rst 'noexist) (eq tracker (codeium-state-alive-tracker state)))
-			(when-let
-				(
-					(request-id-sent
-						(codeium-nested-alist-get reqbody 'codeium/metadata/request_id))
-					(buf (current-buffer)))
-				(codeium-run-with-timer state 'default
-					(lambda ()
-						(when (buffer-live-p buf)
-							(with-current-buffer buf
-								(codeium-request-cancelrequest state request-id-sent))))))
-			(remhash requestid (codeium-state-results-table state)))
-		(if (or (eq rst 'error) (eq rst 'noexist)) nil (cons reqbody rst))))
+		(while (and (eq tracker (codeium-state-alive-tracker codeium-state)) (eq rst 'noexist) (not (input-pending-p)))
+			(sit-for (codeium-get-config 'codeium-delay nil codeium-state))
+			(setq rst (gethash requestid (codeium-state-results-table codeium-state) 'noexist)))
+		(when (and (eq rst 'noexist) (eq tracker (codeium-state-alive-tracker codeium-state)))
+			(remhash requestid (codeium-state-results-table codeium-state)))
+		(unless (or (eq rst 'error)
+					(eq rst 'noexist))
+			(cons reqbody rst))))
 
 (defun codeium-utf8-byte-length (str)
 	(length (encode-coding-string str 'utf-8)))
