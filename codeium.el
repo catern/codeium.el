@@ -329,7 +329,7 @@
 	this can be always \\n")
 
 (codeium-def codeium/editor_options/tab_size ()
-	tab-width)
+	     tab-width)
 (codeium-def codeium/editor_options/insert_spaces ()
 	(if indent-tabs-mode :false t))
 
@@ -955,6 +955,7 @@ returns. Prefer using `codeium-request' directly instead.
 	      (error "codeium-state is not alive! %s" codeium-state))
 	    (let ((body
 		   (let (body)
+		     (push (cons 'codeium/editor_options/tab_size tab-width) body)
 		     (push (cons 'codeium/editor_options/insert_spaces (if indent-tabs-mode :false t)) body)
 		     ;; https://www.reddit.com/r/emacs/comments/5b7o9r/elisp_how_to_concat_newline_into_string_regarding/
 		     (push (cons 'codeium/document/line_ending "\n") body)
