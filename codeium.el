@@ -954,37 +954,37 @@ returns. Prefer using `codeium-request' directly instead.
 	    (unless (codeium-state-alive-tracker codeium-state)
 	      (error "codeium-state is not alive! %s" codeium-state))
 	    (let ((body
-		   (let (body)
-		     (push (cons 'codeium/editor_options/tab_size tab-width) body)
-		     (push (cons 'codeium/editor_options/insert_spaces (if indent-tabs-mode :false t)) body)
+		   (let ((body `((editor_options
+                                  (tab_size . ,tab-width)
+                                  (insert_spaces . ,(if indent-tabs-mode :false t))))
+                               ))
+		     (setf (codeium-nested-alist-get body 'codeium/metadata/request_id) (cl-incf codeium-global-requestid-counter))
+		     (setf (codeium-nested-alist-get body 'codeium/metadata/ide_version) emacs-version)
+		     (setf (codeium-nested-alist-get body 'codeium/metadata/ide_name) "emacs")
+		     (setf (codeium-nested-alist-get body 'codeium/metadata/extension_version) codeium-local-server-version)
 		     ;; https://www.reddit.com/r/emacs/comments/5b7o9r/elisp_how_to_concat_newline_into_string_regarding/
-		     (push (cons 'codeium/document/line_ending "\n") body)
-		     (push
-		      (cons 'codeium/document/language
-			    (let ((mode major-mode))
-			      (while (not (alist-get mode codeium-language-alist))
-				(setq mode (get mode 'derived-mode-parent)))
-			      (alist-get mode codeium-language-alist)))
-		      body)
-		     (push (cons 'codeium/document/editor_language (symbol-name major-mode)) body)
-		     (push (cons 'codeium/document/cursor_offset
-				 (codeium-utf8-byte-length
-				  (buffer-substring-no-properties (point-min) (point))))
-			   body)
-		     (push (cons 'codeium/document/text (buffer-string)) body)
-		     (push (cons 'codeium/metadata/api_key
-				 (if-let ((api-key (or (codeium-state-last-api-key codeium-state) (codeium-get-saved-api-key))))
-				     (setq codeium/metadata/api_key api-key)
-				   (setq codeium/metadata/api_key
-					 (lambda (_api codeium-state)
-					   (when-let ((api-key (codeium-state-last-api-key codeium-state)))
-					     (setq codeium/metadata/api_key api-key))))
-				   nil))
-			   body)
-		     (push (cons 'codeium/metadata/request_id (cl-incf codeium-global-requestid-counter)) body)
-		     (push (cons 'codeium/metadata/ide_version emacs-version) body)
-		     (push (cons 'codeium/metadata/ide_name "emacs") body)
-		     (push (cons 'codeium/metadata/extension_version codeium-local-server-version) body)
+		     (setf (codeium-nested-alist-get body 'codeium/metadata/api_key)
+		           (if-let ((api-key (or (codeium-state-last-api-key codeium-state) (codeium-get-saved-api-key))))
+		               (setq codeium/metadata/api_key api-key)
+		             (setq codeium/metadata/api_key
+		        	   (lambda (_api codeium-state)
+		        	     (when-let ((api-key (codeium-state-last-api-key codeium-state)))
+		        	       (setq codeium/metadata/api_key api-key))))
+		             nil))
+		     (setf (codeium-nested-alist-get body 'codeium/document/line_ending) "\n")
+		     (setf
+		      (codeium-nested-alist-get body 'codeium/document/language)
+		      (let ((mode major-mode))
+		        (while (not (alist-get mode codeium-language-alist))
+		          (setq mode (get mode 'derived-mode-parent)))
+		        (alist-get mode codeium-language-alist)))
+		     (setf (codeium-nested-alist-get body 'codeium/document/editor_language) (symbol-name major-mode))
+		     (setf (codeium-nested-alist-get body 'codeium/document/cursor_offset)
+		           (codeium-utf8-byte-length
+		            (buffer-substring-no-properties (point-min) (point))))
+		     (setf (codeium-nested-alist-get body 'codeium/document/text) (buffer-string))
+		     ;; (setf (codeium-nested-alist-get body 'codeium/document/cursor_offset) 0)
+		     ;; (setf (codeium-nested-alist-get body 'codeium/document/text) "")
 		     body)))
 	      (codeium-request-with-body 'GetCompletions codeium-state body (codeium-state-alive-tracker codeium-state)
 					 (lambda (res)
